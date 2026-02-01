@@ -12,8 +12,8 @@
 ## Table of Contents
 
 1. [Objective](#objective)
-2. [Getting Started](#getting-started)
-3. [Understanding STREAM Benchmark](#understanding-stream-benchmark)
+2. [Understanding STREAM Benchmark](#understanding-stream-benchmark)
+3. [Getting Started](#getting-started)
 4. [Step-by-Step Optimization Journey](#step-by-step-optimization-journey)
 5. [The Roofline Model](#the-roofline-model)
 6. [Final Optimized Configuration](#final-optimized-configuration)
@@ -33,61 +33,6 @@ The STREAM benchmark measures sustainable memory bandwidth through four simple v
 | Scale  | `B[i] = scalar * C[i]` | Multiply by scalar |
 | Add    | `C[i] = A[i] + B[i]` | Vector addition |
 | Triad  | `A[i] = B[i] + scalar*C[i]` | Multiply-add |
-
----
-
-## Getting Started
-
-### Step 1: Request an Interactive Job
-
-```bash
-# Navigate to your working directory
-cd /vol0300/data/hp250477/Students/<uxxxx_YourName>
-
-# Request an interactive job on Fugaku
-pjsub --interact \
-  -x PJM_LLIO_GFSCACHE=/vol0003:/vol0004 \
-  -g "hp250477" \
-  --mpi "max-proc-per-node=1" \
-  -L "rscgrp=excl_hp250477_2601-1" \
-  -L "elapse=02:00:00" \
-  --sparam "wait-time=600" \
-  --no-check-directory
-```
-
-### Step 2: Copy the Materials
-
-```bash
-# Copy the benchmark materials
-cp -r /vol0300/data/hp250477/Materials/AI_and_HPC/SB .
-
-# Navigate to the benchmark directory
-cd SB/
-
-# List the files
-ls -la
-```
-
-**Files included:**
-- `stream.F` - STREAM benchmark source code (Fortran77)
-- `mysecond.c` - Timer function
-- `Makefile` - Build configuration
-- `roofline.gp` - Gnuplot script for roofline visualization
-- `fugaku.data` - Data file for plotting
-- `sweep.sh` - Parameter sweep script
-
-### Step 3: Initial Build and Test
-
-```bash
-# View the source code
-less stream.F
-
-# Build the benchmark
-make -B
-
-# Run the benchmark
-./stream
-```
 
 ---
 
@@ -111,12 +56,107 @@ For the TRIAD operation `A[i] = B[i] + scalar*C[i]`:
 
 ---
 
+## Getting Started
+
+### Step 1: Navigate to Your Working Directory
+
+```bash
+cd /vol0300/data/hp250477/Students/<uxxxx_YourName>
+```
+
+**Explanation:** Change to your personal working directory on the Fugaku shared filesystem. Replace `<uxxxx_YourName>` with your actual user ID and name.
+
+---
+
+### Step 2: Request an Interactive Job
+
+```bash
+pjsub --interact -x PJM_LLIO_GFSCACHE=/vol0003:/vol0004 -g "hp250477" --mpi "max-proc-per-node=1" -L "rscgrp=excl_hp250477_2601-1" -L "elapse=02:00:00" --sparam "wait-time=600" --no-check-directory
+```
+
+**Explanation:** Submit an interactive job request to the Fugaku job scheduler. This command:
+- `--interact` - Requests an interactive session (not batch)
+- `-x PJM_LLIO_GFSCACHE=...` - Sets up filesystem caching for performance
+- `-g "hp250477"` - Specifies the project group for accounting
+- `--mpi "max-proc-per-node=1"` - Limits MPI processes to 1 per node
+- `-L "rscgrp=..."` - Selects the resource group (node allocation)
+- `-L "elapse=02:00:00"` - Requests 2 hours of wall-clock time
+- `--sparam "wait-time=600"` - Waits up to 10 minutes for resources
+- `--no-check-directory` - Skips directory validation
+
+---
+
+### Step 3: Copy the Benchmark Materials
+
+```bash
+cp -r /vol0300/data/hp250477/Materials/AI_and_HPC/SB .
+```
+
+**Explanation:** Recursively copy (`-r`) the STREAM Benchmark directory `SB` from the shared materials location to your current working directory.
+
+---
+
+### Step 4: Enter the Benchmark Directory
+
+```bash
+cd SB/
+```
+
+**Explanation:** Change into the newly copied STREAM Benchmark directory.
+
+---
+
+### Step 5: List the Files
+
+```bash
+ls -la
+```
+
+**Explanation:** List all files (`-a`) in long format (`-l`) to see what's included:
+- `stream.F` - STREAM benchmark source code (Fortran77)
+- `mysecond.c` - Timer function in C
+- `Makefile` - Build configuration
+- `roofline.gp` - Gnuplot script for roofline visualization
+- `fugaku.data` - Data file for plotting
+- `sweep.sh` - Parameter sweep script
+
+---
+
+### Step 6: View the Source Code
+
+```bash
+less stream.F
+```
+
+**Explanation:** Open the STREAM benchmark Fortran source code in a pager for viewing. Press `q` to exit, arrow keys to scroll.
+
+---
+
+### Step 7: Build the Benchmark
+
+```bash
+make -B
+```
+
+**Explanation:** Compile the benchmark using the Makefile. The `-B` flag forces a complete rebuild, ignoring timestamps (unconditionally remake all targets).
+
+---
+
+### Step 8: Run the Benchmark (First Attempt)
+
+```bash
+./stream
+```
+
+**Explanation:** Execute the compiled STREAM benchmark binary. This first run will likely show problems (array too small, showing "Infinity").
+
+---
+
 ## Step-by-Step Optimization Journey
 
-### Attempt 1: First Run (FAILED)
+### Attempt 1: First Run Analysis
 
-**Problem:** Array size too small (64 elements)
-
+**Expected Output (PROBLEMATIC):**
 ```
 Array size =         64
 Copy:        Infinity      0.0000      0.0000      0.0000
@@ -126,219 +166,295 @@ Triad:       Infinity      0.0000      0.0000      0.0000
 ```
 
 **Issues identified:**
-- Array size too small
-- Rate calculation showing "Infinity"
+- Array size too small (64 elements)
+- Rate calculation showing "Infinity" (division by zero time)
 - Timer granularity problems
 
-### Attempt 2: Fix Array Size
+---
 
-**Step 4:** Edit `stream.F` to find and modify the array size parameter.
+### Step 9: Edit Source to Fix Array Size
 
 ```bash
 vim stream.F
-# Look for array size definition and change to a larger value
 ```
 
-**Recommended array size calculation:**
-- For ~1GB memory: `N = 1024*1024*1024/3/8 ≈ 44739242`
-- Must be large enough to exceed all cache levels
+**Explanation:** Open the source file in the vim editor. Search for the array size parameter (look for `64` or `PARAMETER`) and change it to a much larger value.
 
-**Step 5-6:** Recompile and run
+**Recommended array size:** `N = 44739242` (approximately 1GB total memory for 3 arrays)
+
+**How to calculate:** `N = 1024*1024*1024 / 3 / 8` where:
+- 1GB total memory
+- 3 arrays (A, B, C)
+- 8 bytes per double precision element
+
+---
+
+### Step 10: Rebuild After Editing
 
 ```bash
 make -B
+```
+
+**Explanation:** Recompile the benchmark with the new array size. The `-B` flag ensures all files are rebuilt.
+
+---
+
+### Step 11: Run with Larger Array
+
+```bash
 ./stream
 ```
 
-**Result:** ~14 GB/s (still far from peak of 1024 GB/s)
+**Explanation:** Run the benchmark again. You should now see actual numbers instead of "Infinity", but performance will still be low (~14 GB/s).
 
 ---
 
-### Attempt 3: Analyze with Roofline Model
+### Attempt 2 Result: ~14 GB/s
 
-**Step 7:** Calculate Arithmetic Intensity for TRIAD
-
-**Step 8:** Plot the roofline (on local system with gnuplot)
-
-```bash
-# Copy files to local system
-scp <fugaku>:SB/roofline.gp .
-scp <fugaku>:SB/fugaku.data .
-
-# Edit the data files with your measurements
-# Generate the plot
-gnuplot roofline.gp
-```
-
-**Observation:** Performance is ~70x below peak. Fugaku has 48 cores...
+This is far below the theoretical peak of 1024 GB/s. The ratio (1024/14 ≈ 70) is suspiciously close to the number of cores (48).
 
 ---
 
-### Attempt 4: Enable OpenMP Parallelization
-
-**Step 9-10:** Check for parallelization issues
+### Step 12: Check the Makefile for Parallelization
 
 ```bash
 vim Makefile
-# Look for OpenMP flags (-fopenmp or similar)
 ```
 
-**Step 11:** Recompile with OpenMP and run with 48 threads
-
-```bash
-make -B
-OMP_NUM_THREADS=48 ./stream
-```
-
-**Result:** ~64 GB/s (only 5x speedup with 48 cores - still not great)
+**Explanation:** Open the Makefile to check if OpenMP parallelization is enabled. Look for flags like `-fopenmp` (GNU) or `-Kopenmp` (Fujitsu).
 
 ---
 
-### Attempt 5: Switch to Fujitsu Compiler
+### Step 13: Rebuild with OpenMP (if needed)
 
-**Step 12-13:** The GNU compiler may not be optimized for A64FX
+```bash
+make -B
+```
+
+**Explanation:** Rebuild the benchmark after adding OpenMP flags to the Makefile.
+
+---
+
+### Step 14: Run with 48 OpenMP Threads
+
+```bash
+OMP_NUM_THREADS=48 ./stream
+```
+
+**Explanation:** Run the benchmark with the `OMP_NUM_THREADS` environment variable set to 48 (the number of cores on A64FX). This enables all cores to participate in the parallel computation.
+
+---
+
+### Attempt 4 Result: ~64 GB/s
+
+Better, but only 5x speedup with 48 cores. The GNU compiler may not be optimal for A64FX.
+
+---
+
+### Step 15: Switch to Fujitsu Compiler
 
 ```bash
 vim Makefile
-# Change compiler from gcc/gfortran to fcc/frt (Fujitsu compilers)
 ```
 
-**Step 14:** Recompile and run
-
-```bash
-make -B
-OMP_NUM_THREADS=48 ./stream
-```
-
-**Result:** ~91 GB/s (improvement, but still only ~9% of peak)
+**Explanation:** Edit the Makefile to change from GNU compilers (`gcc`/`gfortran`) to Fujitsu compilers (`fcc`/`frt`). Change lines like:
+- `CC = gcc` → `CC = fcc`
+- `FC = gfortran` → `FC = frt`
+- `-fopenmp` → `-Kopenmp`
 
 ---
 
-### Attempt 6: Fix First-Touch Memory Policy
+### Step 16: Rebuild with Fujitsu Compiler
 
-**Step 15-16:** Memory may be allocated on only one NUMA node
+```bash
+make -B
+```
 
-The A64FX has 4 HBM2 memory modules. Without proper first-touch initialization, all memory might be allocated to a single module.
+**Explanation:** Recompile using the Fujitsu compiler, which is specifically optimized for the A64FX processor.
+
+---
+
+### Step 17: Run with Fujitsu-Compiled Binary
+
+```bash
+OMP_NUM_THREADS=48 ./stream
+```
+
+**Explanation:** Run the benchmark compiled with the Fujitsu compiler.
+
+---
+
+### Attempt 5 Result: ~91 GB/s
+
+Improvement, but still only ~9% of peak. The issue is likely memory placement (NUMA/first-touch).
+
+---
+
+### Step 18: Fix First-Touch Memory Initialization
 
 ```bash
 vim stream.F
-# Add OpenMP parallel initialization for arrays
 ```
 
-**Step 17:** Recompile and run
+**Explanation:** Edit the source to ensure arrays are initialized in parallel. In NUMA systems like A64FX (with 4 HBM modules), memory is placed near the core that first "touches" (writes to) it. Serial initialization puts all memory on one HBM module.
 
-```bash
-make -B
-OMP_NUM_THREADS=48 ./stream
-```
-
-**Result:** Shows `**********` (overflow) - something went wrong!
+Add `!$OMP PARALLEL DO` directives around the array initialization loops.
 
 ---
 
-### Attempt 7: Fix Iteration Count and Print Format
+### Step 19: Rebuild with First-Touch Fix
 
-**Step 18-19:** Check for iteration count and print format issues
+```bash
+make -B
+```
+
+**Explanation:** Recompile after adding parallel initialization.
+
+---
+
+### Step 20: Run with First-Touch Fix
+
+```bash
+OMP_NUM_THREADS=48 ./stream
+```
+
+**Explanation:** Run the benchmark. If you see `**********` (asterisks), there's a print format overflow - proceed to next fix.
+
+---
+
+### Step 21: Fix Print Format and Iterations
 
 ```bash
 vim stream.F
-# Check NTIMES parameter (iterations)
-# Check print format specifiers
 ```
 
-**Step 20:** Recompile and run
+**Explanation:** Edit the source to:
+1. Increase the `NTIMES` parameter (number of iterations) for more accurate timing
+2. Fix the print format specifier to handle larger numbers (e.g., change `F10.4` to `F12.4`)
+
+---
+
+### Step 22: Rebuild with Format Fix
 
 ```bash
 make -B
+```
+
+**Explanation:** Recompile after fixing the print format.
+
+---
+
+### Step 23: Run with All Fixes So Far
+
+```bash
 OMP_NUM_THREADS=48 ./stream
 ```
 
-**Result:** ~631 GB/s (significant improvement - 60% of peak)
+**Explanation:** Run the benchmark with array size, OpenMP, Fujitsu compiler, first-touch, and format fixes applied.
 
 ---
 
-### Attempt 8: Try Prepage Memory Policy (FAILED)
+### Attempt 7 Result: ~631 GB/s
 
-**Step 21-22:** Experiment with Fugaku's page allocation
-
-```bash
-make -B
-OMP_NUM_THREADS=48 \
-XOS_MMM_L_PAGING_POLICY=prepage:prepage:prepage \
-./stream
-```
-
-**Result:** Back to ~91 GB/s - prepage broke first-touch!
+Significant improvement - now at 62% of peak!
 
 ---
 
-### Attempt 9: Add Compiler Optimization Flags
-
-**Step 24-25:** Add prefetch and zfill flags
+### Step 24: Add Prefetch and Zfill Compiler Flags
 
 ```bash
 vim Makefile
-# Add compiler flags:
-# -Kprefetch_sequential=soft
-# -Kprefetch_line=12
-# -Kzfill=14
 ```
 
-**Step 26:** Recompile and run with on-demand paging
-
-```bash
-make -B
-OMP_NUM_THREADS=48 \
-XOS_MMM_L_PAGING_POLICY=demand:demand:demand \
-./stream
-```
-
-**Result:** ~739 GB/s (72% of peak)
+**Explanation:** Add Fujitsu-specific optimization flags for memory access patterns:
+- `-Kprefetch_sequential=soft` - Enable software prefetching for sequential access
+- `-Kprefetch_line=12` - Set prefetch distance (cache lines ahead)
+- `-Kzfill=14` - Enable zero-fill optimization for write-only memory
 
 ---
 
-### Attempt 10: Parameter Sweep for Optimal Flags
+### Step 25: Rebuild with Prefetch Flags
 
-**Step 27-28:** Perform a pruned full factorial experiment
+```bash
+make -B
+```
+
+**Explanation:** Recompile with the new prefetch and zfill optimization flags.
+
+---
+
+### Step 26: Run with On-Demand Paging
+
+```bash
+OMP_NUM_THREADS=48 XOS_MMM_L_PAGING_POLICY=demand:demand:demand ./stream
+```
+
+**Explanation:** Run the benchmark with Fujitsu's paging policy set to "demand" for all memory types. This works better with first-touch initialization than "prepage" mode.
+
+---
+
+### Attempt 9 Result: ~739 GB/s
+
+Now at 72% of peak. Can we do better with parameter tuning?
+
+---
+
+### Step 27: View the Sweep Script
+
+```bash
+less sweep.sh
+```
+
+**Explanation:** View the parameter sweep script that will test different combinations of `ZFILL` and `PREF` values.
+
+---
+
+### Step 28: Edit the Sweep Script
 
 ```bash
 vim sweep.sh
-# Configure parameter ranges for ZFILL and PREF
-# Both flags can be 1-100, so we test a subset around known good values
 ```
 
-**Step 29:** Run the sweep
+**Explanation:** Configure the sweep ranges. Both `ZFILL` and `PREF` can be 1-100, but testing all 10,000 combinations is impractical. Test values around the initial guesses (8-18 range).
+
+---
+
+### Step 29: Run the Parameter Sweep
 
 ```bash
 bash ./sweep.sh
 ```
 
-**Sample output:**
+**Explanation:** Execute the sweep script to find optimal `ZFILL` and `PREF` values. This will compile and run multiple times with different flag combinations.
+
+**Sample Output:**
 ```
-14 18 Triad: 595556.6729 0.0018 ...
-16  8 Triad: 830462.7624 0.0013 ...
-16 10 Triad: 840067.0696 0.0013 ...
-16 12 Triad: 843370.7042 0.0013 ...  <-- Best!
-16 14 Triad: 731341.2732 0.0015 ...
+16 12 Triad: 843370.7042 0.0013 0.0013 0.0013  <-- Best!
 ```
 
-**Best configuration found:** `ZFILL=16, PREF=12`
+---
+
+### Step 30: Final Build with Optimal Parameters
+
+```bash
+ZFILL=16 PREF=12 make -B
+```
+
+**Explanation:** Rebuild with the optimal `ZFILL=16` and `PREF=12` values found by the sweep.
+
+---
+
+### Step 31: Final Optimized Run
+
+```bash
+OMP_NUM_THREADS=48 XOS_MMM_L_PAGING_POLICY=demand:demand:demand ./stream
+```
+
+**Explanation:** Run the final optimized benchmark.
 
 ---
 
 ## Final Optimized Configuration
-
-### Final Build and Run
-
-```bash
-# Build with optimal flags
-ZFILL=16 PREF=12 make -B
-
-# Run with optimal environment
-OMP_NUM_THREADS=48 \
-XOS_MMM_L_PAGING_POLICY=demand:demand:demand \
-./stream
-```
 
 ### Final Results
 
@@ -400,6 +516,36 @@ Where:
 
 ---
 
+### Step 32: Copy Roofline Files (On Local System)
+
+```bash
+scp <fugaku>:SB/roofline.gp .
+```
+
+**Explanation:** Secure copy the gnuplot script from Fugaku to your local machine for visualization.
+
+---
+
+### Step 33: Copy Data File (On Local System)
+
+```bash
+scp <fugaku>:SB/fugaku.data .
+```
+
+**Explanation:** Secure copy the data file containing your benchmark results.
+
+---
+
+### Step 34: Generate Roofline Plot (On Local System)
+
+```bash
+gnuplot roofline.gp
+```
+
+**Explanation:** Run gnuplot to generate the roofline visualization showing where your TRIAD results fall relative to the theoretical peak.
+
+---
+
 ## Summary of Lessons Learned
 
 ### Common Pitfalls in Benchmarking
@@ -436,30 +582,6 @@ Where:
 | 10 | + Tuned parameters | 845 | 82% |
 
 **Total speedup achieved: ~50x from initial naive run!**
-
----
-
-## Quick Reference: Final Working Commands
-
-```bash
-# 1. Request interactive job
-pjsub --interact -x PJM_LLIO_GFSCACHE=/vol0003:/vol0004 \
-  -g "hp250477" --mpi "max-proc-per-node=1" \
-  -L "rscgrp=excl_hp250477_2601-1" -L "elapse=02:00:00" \
-  --sparam "wait-time=600" --no-check-directory
-
-# 2. Copy and enter directory
-cp -r /vol0300/data/hp250477/Materials/AI_and_HPC/SB .
-cd SB/
-
-# 3. Build with optimal flags
-ZFILL=16 PREF=12 make -B
-
-# 4. Run with optimal environment
-OMP_NUM_THREADS=48 \
-XOS_MMM_L_PAGING_POLICY=demand:demand:demand \
-./stream
-```
 
 ---
 
