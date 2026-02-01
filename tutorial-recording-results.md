@@ -20,31 +20,15 @@ This guide explains how to record your STREAM benchmark results and calculate GF
 
 ### Example Output (Problematic - Array Too Small)
 
-```
-----------------------------------------------
- Double precision appears to have 16 digits of accuracy
- Assuming 8 bytes per DOUBLE PRECISION word
-----------------------------------------------
- ----------------------------------------------
- STREAMy Version $ Revision: 3.14 $
- ----------------------------------------------
- Array size =         64
- --
- The *best* time for each test is used
- *EXCLUDING* the first and last iterations
- ----------------------------------------------
- ----------------------------------------------------
- Your clock granularity/precision appears to be      1 microseconds
- ----------------------------------------------------
-Function     Rate (MB/s)  Avg time   Min time  Max time
-Copy:        Infinity      0.0000      0.0000      0.0000
-Scale:       Infinity      0.0000      0.0000      0.0000
-Add:         Infinity      0.0000      0.0000      0.0000
-Triad:       Infinity      0.0000      0.0000      0.0000
- ----------------------------------------------------
- Solution Validates!
- ----------------------------------------------------
-```
+![Initial Run with Array Size 64 - Shows Infinity](assets/InitialRun.png)
+
+*Figure 1: Initial run with default array size of 64 elements showing "Infinity" results*
+
+**Key observations from the screenshot:**
+- `Array size = 64` - This is far too small
+- All rates show `Infinity` - Division by zero (time too small to measure)
+- All times show `0.0000` - Timer cannot capture such fast operations
+- `Solution Validates!` - The math is correct, but the measurement is invalid
 
 **Problem:** Array size of 64 is too small. The computation finishes faster than the timer can measure, resulting in "Infinity" (division by zero time).
 
@@ -52,26 +36,22 @@ Triad:       Infinity      0.0000      0.0000      0.0000
 
 ### Example Output (Good - Proper Array Size)
 
-```
-----------------------------------------------
- STREAMy Version $ Revision: 3.14 $
- ----------------------------------------------
- Array size =   44739242
- The total memory requirement is 1023 MB
- ----------------------------------------------------
- Number of Threads =       48
- ----------------------------------------------------
-Function     Rate (MB/s)  Avg time   Min time  Max time
-Copy:        774612.9275   0.0009     0.0009     0.0009
-Scale:       771428.4961   0.0009     0.0009     0.0009
-Add:         838190.8729   0.0013     0.0013     0.0013
-Triad:       843528.6683   0.0013     0.0013     0.0013
- ----------------------------------------------------
- Solution Validates!
- ----------------------------------------------------
-```
+![Attempt 1 with Fixed Array Size - Shows Valid Results](assets/Attemp1.png)
+
+*Figure 2: After fixing array size to 44739242, showing valid benchmark results*
+
+**Key observations from the screenshot:**
+- `Array size = 44739242` - Proper size (~1GB total memory)
+- `Triad: 18274.6290 MB/s` - This is valid, measurable data
+- Times are non-zero (e.g., `0.0588` seconds) - Timer can measure properly
+- `Solution Validates!` - Results are mathematically correct
 
 **This is valid data** that can be recorded and used for analysis.
+
+**From this screenshot, we can calculate:**
+```
+Triad GFLOPs = 18274.6290 / 12000 = 1.52 GFLOPs
+```
 
 ---
 
@@ -163,32 +143,34 @@ GFLOPs = Rate_in_MB/s / 12000
 
 #### Example 1: First Run (Broken - Infinity)
 
+From Figure 1 (InitialRun.png):
 ```
 Array size = 64
 Triad Rate = Infinity
 ```
 
-**Result:** Cannot calculate - array too small, invalid data.
+**Result:** Cannot calculate - array too small, invalid data. **Do not record this in fugaku.data.**
 
 ---
 
-#### Example 2: Serial Run (~14 GB/s)
+#### Example 2: Serial Run with Fixed Array Size
 
+From Figure 2 (Attemp1.png):
 ```
 Array size = 44739242
-Triad Rate = 14191.4937 MB/s
+Triad Rate = 18274.6290 MB/s
 ```
 
 **Calculation:**
 
 ```
-GFLOPs = 14191.4937 / 12000
-GFLOPs = 1.18 GFLOPs
+GFLOPs = 18274.6290 / 12000
+GFLOPs = 1.52 GFLOPs
 ```
 
 **For fugaku.data:**
 - Arithmetic Intensity: 0.0833
-- Performance: 1.18 GFLOPs
+- Performance: 1.52 GFLOPs
 
 ---
 
@@ -281,9 +263,9 @@ Use this table to convert your Triad Rate to GFLOPs:
 # STREAM Triad Results on Fugaku A64FX
 # Format: Label  AI(flop/byte)  Performance(GFLOPs)
 #
-# Attempt 1: Default array size (64) - INVALID
-# Attempt 2: Array size fixed, serial
-Triad0   0.0833   1.18
+# Attempt 1: Default array size (64) - INVALID, do not record
+# Attempt 2: Array size fixed (44739242), serial run
+Triad0   0.0833   1.52
 # Attempt 4: OpenMP enabled (48 threads)
 Triad1   0.0833   5.33
 # Attempt 5: Fujitsu compiler
