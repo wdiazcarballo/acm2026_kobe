@@ -71,7 +71,7 @@ cd /vol0300/data/hp250477/Students/<uxxxx_YourName>
 ### Step 2: Request an Interactive Job
 
 ```bash
-pjsub --interact -x PJM_LLIO_GFSCACHE=/vol0003:/vol0004 -g "hp250477" --mpi "max-proc-per-node=1" -L "rscgrp=excl_hp250477_2601-1" -L "elapse=02:00:00" --sparam "wait-time=600" --no-check-directory
+pjsub --interact -x PJM_LLIO_GFSCACHE=/vol0003:/vol0004 -g "hp250477" --mpi "max-proc-per-node=1" -L "rscgrp=int" -L "elapse=02:00:00" --sparam "wait-time=600" --no-check-directory
 ```
 
 **Explanation:** Submit an interactive job request to the Fugaku job scheduler. This command:
